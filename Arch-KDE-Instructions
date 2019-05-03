@@ -1,0 +1,438 @@
+** Arch Linux KDE Plasma installation complete wifi method**
+** This is more than an install. This is everything you will ever need for install and performance.
+
+Making a new installation USB
+sudo dd bs=4M if=path/to/archlinux.iso of=/dev/sdx status=progress oflag=sync
+
+Erasing the disk before we begin.
+First method is with gdisk
+gdisk /dev/sda
+x
+z
+This method is with sgdisk in a single command.
+sgdisk --z /dev/sda
+Make sure it is erased
+sgdisk -p /dev/sda
+
+Do not use fdisk to make gpt partitons
+If you don't want to use parted which is the best method by the way especially for ssd and you want to use a graphical program instead then
+either use gparted on another Linux Live USB and make your partitons that way first before you ever boot from the Arch USB or use
+sgdisk /dev/sda or whatever your disk number is.It will be easier than parted but if you follow my instructions you will have perfectly
+aligned partitions with great performance.
+
+IF YOU CHOOSE TO DO IT WITH GPARTED FROM ANOTHER LINUX USB THEN MAKE SURE YOU HAVE AT LEAST 2 PARTITIONS.
+BOOT
+ROOT
+
+PREFERABLE 3
+BOOT
+ROOT
+HOME
+
+Erasing the partitons if you didn't do it the other way up top.
+
+parted /dev/sda
+
+print ( to see existing partitons)
+
+rm 1 ( remove partiton 1)
+
+rm 2
+
+rm 3
+
+quit (to write changes)
+
+( I reboot here so that I make sure my PC sees that the Partitions have been removed.)
+( Some people say you don't have to reboot and that you can just run this command (partprobe /dev/sda)
+( Here we have three partitons boot 512MiB,root 50GiB and home ( use percent and leave 10 to 15 percent or a 256 GB ssd for over
+provisioning. I leave more because I don't need it. At least leave 10 percent so it would be 90%.
+
+parted /dev/sda
+Creating a new partiton table.
+mklabel gpt
+Creating the boot partition
+mkpart primary fat32 1MiB 513MiB
+set 1 esp on
+Creating root
+mkpart primary ext4 513MiB 50.5GiB
+Creating home
+mkpart primary ext4 50.5GiB 82%
+print   (List the partitons)
+
+Check alignment
+parted /dev/sda
+align-check optimal 1
+align-check optimal 2
+align-check optimal 3
+quit
+
+REBOOT
+
+### Format Disk ######
+mkfs.fat -F32 /dev/sda1
+mkfs.ext4 /dev/sda2
+mkfs.ext4 /dev/sda3
+
+Connect to internet
+
+Wifi-menu 
+
+Update the clock
+timedatectl set-ntp true
+timedatectl status
+
+pacman -Syu
+
+### Mount Partitions ###
+
+Mount /dev/sda2 /mnt
+mkdir /mnt/boot
+mkdir /mnt/home
+Mount /dev/sda1 /mnt/boot
+mount /dev/sda3 /mnt/home
+
+### get the fastest mirrors ###
+
+Install reflector with sudo pacman -Syu reflector
+
+backup mirrorlist
+cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+
+You can use any number you like instead of 100. That is the number of mirrors you will have.
+You can also cahnge from http first to https first 
+
+sudo reflector --latest 100 --protocol http --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
+#### Pacstrap Arch #####
+pacstrap - i /mnt base base-devel
+
+### Generate fstab ###
+genfstab -U -p /mnt >> /mnt/etc/fstab
+
+nano /mnt/etc/fstab
+
+## Chroot into arch ##
+arch-chroot /mnt
+
+### Language ###
+nano /etc/locale.gen
+Uncomment en_US.UTF-8
+
+## Generate the locale ##
+locale-gen
+
+### Set it as your language ###
+1  echo LANG=en_US.UTF-8 > /etc/locale.conf
+2  export LANG=en_US.UTF-8
+
+### Time ###
+Type 
+ln -sf /usr/share/zoneinfo/ and hit tab and sometimes you must hit tab twice on my PC and
+it will show you a list of countries. When you find you desired country then type for and example
+ln -sf /usr/share/zoneinfo/America/
+and hit tab again and it will show a list of cities and when you find your proper time zone then type it like this and hit enter
+ln -sf /usr/share/zoneinfo/America/Chicago  /etc/localtime
+
+set hardware clock to utc
+hwclock --systohc --utc
+
+### Hostname ### ( USE YOUR HOSTNAME WHERE archpc IS MINE)
+echo archpc > /etc/hostname
+
+### Enable multilib ###
+nano /etc/pacman.conf
+### Uncomment this ####
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+
+### Update mirrors ###
+pacman Syu
+
+## Set password for root ##
+passwd
+
+### Add default user to the groups with ### ( ADD YOUR NAME WHERE MINE IS josh )
+
+useradd -m -g users -G wheel,storage,power -s /bin/bash josh
+
+## Set password for the user ##
+
+passwd josh
+
+## Setting sudoers ###
+
+EDITOR=nano visudo
+
+Uncomment the %wheel ALL=(ALL) ALL
+
+###Install a couple packages #### ( leave intel-ucode off if you have AMD )
+pacman -S bash-completion
+pacman -S intel-ucode
+
+mount -t efivarfs efivarfs /sys/firmware/efi/efivars
+This should say already mounted but we are just checking 
+
+I use systemd boot because it is easier,faster and it just works
+
+bootctl install
+
+### Create conf for boot loader ### ( leave initrd /intel-ucode.img if you have AMD )
+nano /boot/loader/entries/arch.conf
+title Arch Linux
+linux /vmlinuz-linux
+initrd /intel-ucode.img
+initrd /initramfs-linux.img
+
+#### Add PARTUUID of thr ROOT partiton to our boot loader confifuration
+if you need to check run lsblk and find the one that has /
+Change sda2 to whatever your root is
+
+echo "options root=PARTUUID=$(blkid -s PARTUUID -o value /dev/sda2) rw quiet nmi_watchdog=0" >> /boot/loader/entries/arch.conf
+
+nano /boot/loader/entries/arch.conf ( just to check if correctly added)
+
+pacman -S dialog wireless_tools wpa_supplicant
+
+### Unmount #####
+
+exit
+umount -R /mnt
+reboot
+
+#### Install Packages and desktop ####
+Connect to wifi-menu
+sudo pacman -Syu reflector
+sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+sudo reflector --latest 100 --protocol http --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
+sudo pacman -Syu
+
+sudo pacman -S xorg xorg-server 
+
+sudo pacman -S intel-media-driver xf86-video-fbdev
+
+sudo pacman -S sddm
+
+sudo pacman -S plasma
+
+sudo pacman -S dolphin kate konsole ark gwenview xdg-user-dirs xf86-input-synaptics spectacle git kompare kwalletmanager gtk-engine-murrine wget gnome-themes-extra gtk-engines ksystemlog
+
+these should be already installed so check with
+pacman -Qi noto-fonts
+
+Remove the discover software center with 
+sudo pacman -Rns discover
+
+Enable kms on intel graphics
+sudo echo "echo \"options i915 modeset=1 enable_guc=2\" >> /etc/modprobe.d/i915.conf" | sudo bash
+
+enable early kms
+sudo nano /etc/mkinitcpio.conf
+
+add this to the file just like this
+MODULES=(i915)
+
+sudo mkinitcpio -p linux
+
+sudo bootctl update
+
+If you installed synaptics driver
+sudo cp -r /usr/share/X11/xorg.conf.d/70-synaptics.conf /etc/X11/xorg.conf.d/50-synaptics.conf
+
+sudo systemctl enable sddm.service
+
+sudo systemctl set-default graphical enviroment
+reboot
+
+Or we can use the echo "exec startkde" > ~/.xinitrc
+
+sudo pacman -S networkmanager 
+sudo systemctl enable NetworkManager.service
+
+REBOOT---MAKE SURE YOUR READY
+
+Confirm guc andn guc 
+sudo cat /sys/kernel/debug/dri/0/i915_huc_load_status
+sudo cat /sys/kernel/debug/dri/0/i915_guc_load_status
+
+Confirm modeset
+sudo cat /sys/module/i915/parameters/modeset
+You should get a 1 back
+
+performance
+sudo nano /etc/fstab
+
+Add noatime and commit=60 to / and /home and your tmpfs for tmp 
+
+**Example here is my fstab**
+
+# <file system> <dir> <type> <options> <dump> <pass>
+# /dev/sda2
+UUID=22508e5b-64ac-498c-9bfb-77ed6d1e4edb       /               ext4            rw,noatime,commit=60    0 1
+
+# /dev/sda1
+UUID=9869-E399          /boot           vfat            rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,utf8,errors=remount-ro       0 2
+
+# /dev/sda3
+UUID=03152779-a44d-420d-8ce9-91a7258f1764       /home           ext4            rw,noatime,commit=60    0 2
+tmpfs                   /tmp                                    tmpfs           noatime,nodev,nosuid    0 0
+
+
+REBOOT
+
+Set hooks
+The first hook is so that you don't have to worry about running sudo bootctl update after kernel updates because it is done for you.
+The second hook takes care of your your pacnew files so that you don't have to worry about them manually.
+These are very important and the first one needs to be exactly like mine but the second one you can choose less mirrors if you want to.
+
+sudo mkdir /etc/pacman.d/hooks
+
+sudo nano /etc/pacman.d/hooks/100-systemd-boot.hook
+[Trigger]
+Type = Package
+Operation = Upgrade
+Target = systemd
+
+[Action]
+Description = Updating systemd-boot
+When = PostTransaction
+Exec = /usr/bin/bootctl update
+
+
+sudo nano /etc/pacman.d/hooks/mirrorupgrade.hook
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = pacman-mirrorlist
+
+[Action]
+Description = Updating pacman-mirrorlist with reflector and removing pacnew...
+When = PostTransaction
+Depends = reflector 
+Exec = /usr/bin/env sh -c "reflector --latest 100 --protocol http --protocol https --sort rate  --save /etc/pacman.d/mirrorlist; if [[ -f /etc/pacman.d/mirrorlist.pacnew ]]; then rm /etc/pacman.d/mirrorlist.pacnew; fi"
+
+
+Build packages faster in the tmpfs you just created
+sudo nano /etc/makepkg.conf
+uncomment MAKEFLAGS= and add it like this MAKEFLAGS="-j$(nproc)"
+change build directory to tmpfs but remember to make sure you have it mounted with noexec
+uncomment BUILDDIR=/tmp/makepkg
+
+Install pamac-aur
+git clone https://aur.archlinux.org/pamac-aur.git
+cd pamac-aur
+makepkg -sic
+exit
+sudo rm -r pamac-aur
+
+set .build as build directory
+
+install pacmac-tray-appindicator with pamac
+
+You need to install some up to date Microsoft fonts from the AUR once you have pamac-aur installed.
+
+Install chromium-vaapi-bin
+chromium-widevine
+set flags in .config with file name
+chromium-flags.config and add these just like this
+
+--enable-accelerated-mjpeg-decode
+--enable-accelerated-video
+--ignore-gpu-blacklist
+--enable-gpu-rasterization
+--enable-native-gpu-memory-buffers
+--enable-zero-copy
+--enable-quic
+--enable-memory-coordinator
+--enable-font-cache-scaling
+--enable-parallel-downloading
+
+
+Start chromium and log in and then close
+
+sudo nano /etc/fstab
+
+tmpfs                /home/josh/.cache/chromium/Default   tmpfs           noatime,nodev,nosuid        0 0
+
+reboot and chromium cache will be in ram
+
+Fix performance.
+sudo echo "echo \"vm.dirty_writeback_centisecs = 6000\" >> /etc/sysctl.d/99-sysctl.conf" | sudo bash
+sudo echo "echo \"vm.dirty_background_ratio = 20\" >> /etc/sysctl.d/99-sysctl.conf" | sudo bash
+sudo echo "echo \"vm.dirty_ratio = 40\" >> /etc/sysctl.d/99-sysctl.conf" | sudo bash
+sudo echo "echo \"vm.vfs_cache_pressure = 50\" >> /etc/sysctl.d/99-sysctl.conf" | sudo bash
+
+sudo nano /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
+
+[connection]
+wifi.powersave =2
+
+sudo nano /etc/modprobe.d/blacklist.conf
+
+#blacklist the speaker module to stop beeps
+blacklist pcspkr
+
+#Blacklist know watchdog modules for faster /boot/shutdown
+blacklist iTCO_wdt
+blacklist iTCO_vendor_support
+
+#Disable webcam
+blacklist uvcvideo
+
+#Disable Bluetooth
+blacklist btusb
+blacklist bluetooth
+
+#Disable joystick driver
+blacklist joydev
+
+sudo systemctl enable fstrim.timer
+
+Limit journal size
+sudo nano /etc/systemd/journald.conf
+systemmaxuse=200M
+systemmaxfilesize=50M
+
+
+Disable the blinking light on laptop.
+sudo echo "echo \"options iwlwifi led_mode=1\" >> /etc/modprobe.d/iwlwifi.conf" | sudo bash
+
+Disable touchscreen
+sudo nano /usr/share/X11/xorg.conf.d/40-libinput.conf
+Add the line that says option "ignore" "on"
+
+ScrSection "InputClass"
+        Identifier "libinput touchscreen catchall"
+        MatchIsTouchscreen "on"
+        MatchDevicePath "/dev/input/event*"
+        Driver "libinput"
+        Option "ignore" "on"  #Disable touchscreen
+EndSection
+
+Cleanup
+sudo pacman -Sc && sudo pacman -Rns $(pacman -Qtdq)
+find -xtype l -print
+find -xtype l -delete
+
+Trim disk
+Entire disk
+sudo fstrim -av
+Or sep partitons
+sudo fstrim -v /
+sudo fstrim -v /home
+
+sudo systemctl enable fstrim.service (TRIM)
+
+Stop KDE from showing bookmarks in the kickoff menu.
+
+$ mkdir ~/.local/share/kservices5
+$ sed 's/EnabledByDefault=true$/EnabledByDefault=false/' /usr/share/kservices5/plasma-runner-bookmarks.desktop > ~/.local/share/kservices5/plasma-runner-bookmarks.desktop
+
+Cleanup
+sudo pacman -Sc && sudo pacman -Rns $(pacman -Qtdq)
+find -xtype l -print
+find -xtype l -delete
+
+If something ever happened that you don't have network on final reboot then you can always use sudo wifi-menu to install your needed stuff.
+Kinda a safeguard I guess.

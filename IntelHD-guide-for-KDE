@@ -1,0 +1,81 @@
+                                              *** Small guide for Intel HD Graphics in KDE ***
+This is for Arch based Disro's but it will work any Distro but packages and commands may be a little different.
+
+Go to compositor settings
+
+set the Animation speed either all the way to the left or to the first mark
+
+scale method crisp ( my preferred) or you can do smooth
+
+OpenGL 3.1
+
+tearing prevention auto
+
+Keep thumbbnails - Only for shown windows
+
+Allow applications to block compositing on
+
+
+For me with the Intel HD 620 I get very similar performace with or without the xf86-video-intel installed but if you do install it then add
+this file .
+
+
+sudo nano /etc/X11/xorg.conf.d/20-intel.conf
+
+
+Section "Device"
+
+Identifier "Intel Graphics"
+
+Driver "intel"
+
+EndSection
+############################################################
+
+Now let us say you want to use the the modesetting driver which is mainly the reccomended way now so let us set that up. First off if you
+have the xf86-video-intel installed then go ahead and run sudo pacman -Rns xf86-video-intel and remove the driver and then if you have added the config file above then you also need to sudo rm -r /etc/X11/xorg.conf.d/20-intel.conf 
+Better to try this both ways to find the sweet spot because I promise no two pc's are the same.
+
+Enable kms on intel graphics and huc and guc (HEADS UP YOU MUST HAVE THE FIRMWARE INSTALLED FOR HUC AND GUC AND YOU NEED BECAUSE HARDWARE ACCELERATION) This is a must if you want to use hardware acceleration in Chrome,Chromium or any other browser for that matter.)
+
+sudo echo "echo \"options i915 modeset=1 enable_guc=2\" >> /etc/modprobe.d/i915.conf" | sudo bash
+
+That is for KMS ( kernel modesetting)
+
+Let us also enable early kms so run this command
+sudo nano /etc/mkinitcpio.conf
+
+add this to the file just like this
+MODULES=(i915)
+
+sudo mkinitcpio -p linux
+
+Install the intel-media-driver for hardware acceleration
+sudo pacman -S intel-media-driver
+
+refer to the Arch wiki for more info on kms and early kms
+
+REBOOT
+
+Confirm guc and huc loaded
+
+sudo cat /sys/kernel/debug/dri/0/i915_huc_load_status
+
+sudo cat /sys/kernel/debug/dri/0/i915_guc_load_status
+
+Confirm you are using modesetting 
+sudo cat /sys/module/i915/parameters/modeset
+You should get a 1 back if all is well
+
+Install Chromium-vaapi and Chromium-widevine ( If you follow these instructions then you will have hardware acceleration)
+To confirm your hardware acceleration is working then go to Netflix or any other streaming service and play a video and then open a new tab and type this in the title bar and hit enter:
+chrome://media-internals
+
+Under video_codec_name you should see 	h264 or vp9 and if not you need to check your stuff because it for sure works. I have shown how to change the settings and check if they were changed properly so if any of those checks didn't do what i said then you need to redo it or search or something because this cut my processor use in half while streaming video and cut my fans use down also. it is well worth the few minutes time.
+
+You can follow any other thing you want but this is the best. I have used the Intel HD 620 since it came out on every Linux Desktop
+environment and this is all you need to do.
+
+If your not running a patched version of Chromium or some other tweaked browser you do
+not have hardware acceleration in the browser no matter what you may think. Do some reading first if you do not believe this.
+
