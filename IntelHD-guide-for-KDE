@@ -1,5 +1,6 @@
                                               *** Small guide for Intel HD Graphics in KDE ***
 This is for Arch based Disro's but it will work any Distro but packages and commands may be a little different.
+You need to have the firmware installed
 
 Go to compositor settings
 
